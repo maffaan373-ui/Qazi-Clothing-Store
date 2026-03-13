@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Test - Description Check</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body style="font-family: Arial; padding: 20px;">
+<h1>Database Description Test</h1>
+<button onclick="testDB()" style="padding: 10px 20px; font-size: 16px;">Load Products from Database</button>
+<div id="result" style="margin-top: 20px; white-space: pre-wrap; background: #f5f5f5; padding: 20px; border-radius: 8px;"></div>
+
+<script>
+const SUPABASE_URL = "https://qrflkkjrsepwqxfgztct.supabase.co";
+const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFyZmxra2pyc2Vwd3F4Zmd6dGN0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIwMjY2NjIsImV4cCI6MjA4NzYwMjY2Mn0.KXJrHf5enS-fuuXjEdbr-bQ7pU9R5lJF8QPsqz71UeE";
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+
+async function testDB() {
+  const resultDiv = document.getElementById('result');
+  resultDiv.innerHTML = 'Loading...';
+  
+  try {
+    const { data, error } = await sb.from("products").select("*");
+    
+    if (error) {
+      resultDiv.innerHTML = `ERROR: ${error.message}`;
+      return;
+    }
+    
+    if (!data || data.length === 0) {
+      resultDiv.innerHTML = 'No products found in database.';
+      return;
+    }
+    
+    let output = `Found ${data.length} product(s):\n\n`;
+    
+    data.forEach((p, i) => {
+      output += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+      output += `Product #${i + 1}\n`;
+      output += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+      output += `ID: ${p.id}\n`;
+      output += `Name: ${p.name}\n`;
+      output += `Price: PKR ${p.price}\n`;
+      output += `Description: ${p.description || '(EMPTY/NULL)'}\n`;
+      output += `Image URL: ${p.image_url ? 'YES' : 'NO'}\n`;
+      output += `Created: ${p.created_at}\n\n`;
+    });
+    
+    resultDiv.innerHTML = output;
+    
+  } catch (e) {
+    resultDiv.innerHTML = `EXCEPTION: ${e.message}`;
+  }
+}
+</script>
+</body>
+</html>
