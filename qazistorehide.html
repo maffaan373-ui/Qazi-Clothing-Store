@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Admin – Qazi Clothing Store</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+  // ══════════════════════════════════════════════════════════════
+  //   CONFIG
+  // ══════════════════════════════════════════════════════════════
+  const SUPABASE_URL    = "https://qrflkkjrsepwqxfgztct.supabase.co";
+  const SUPABASE_ANON   = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFyZmxra2pyc2Vwd3F4Zmd6dGN0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIwMjY2NjIsImV4cCI6MjA4NzYwMjY2Mn0.KXJrHf5enS-fuuXjEdbr-bQ7pU9R5lJF8QPsqz71UeE";
+  const STORAGE_BUCKET  = "product-images";
+  const ADMIN_PASSWORD  = "G4eJ8dL2aR";
+
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+  let products = [];
+
+  // ── AUTH ─────────────────────────────────────────────────────
+  document.addEventListener("DOMContentLoaded", () => {
+    if (localStorage.getItem("velour_auth") === "true") {
+      showDashboard();
+    }
+    document.getElementById("login-btn").addEventListener("click", login);
+    document.getElementById("logout-btn").addEventListener("click", logout);
+    document.getElementById("add-form").addEventListener("submit", addProduct);
+  });
+
+  function login() {
+    const pw = document.getElementById("pw-input").value.trim();
+    if (pw === ADMIN_PASSWORD) {
+      localStorage.setItem("velour_auth", "true");
+      showDashboard();
+    } else {
+      alert("Incorrect password");
+    }
+  }
+
+  function logout() {
+    localStorage.removeItem("velour_auth");
+    location.reload();
+  }
+
+  function showDashboard() {
+    document.getElementById("auth-screen").classList.add("hidden");
+    document.getElementById("dashboard").classList.remove("hidden");
+    loadProducts();
+  }
+
+  function showSection(id) {
+    document.querySelectorAll(".section").forEach(s => s.classList.add("hidden"));
+    document.getElementById("sec-" + id).classList.remove("hidden");
+  }
+
+  // ── PRODUCTS ─────────────────────────────────────────────────
+  async function loadProducts() {
+    const { data, error } = await sb
+      .from("products")
+      .select("*")
+      .order("created_at", { ascending: false });
+    
+    if (error) {
+      alert("Error loading products: " + error.message);
+      return;
+    }
+    
+    products = data || [];
+    renderProducts();
+  }
+
+  function renderProducts() {
+    const tbody = document.getElementById("products-tbody");
+    tbody.innerHTML = "";
+    
+    if (products.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="4" class="text-center py-8 text-gray-500">No products found</td></tr>';
+      return;
+    }
+    
+    products.forEach(p => {
+      tbody.innerHTML += `
+      <tr class="border-b hover:bg-gray-50">
+        <td class="p-3">
+          <img src="${p.image_url}" alt="${p.name}" 
+               class="w-12 h-16 object-cover rounded"
+               onerror="this.src='https://placehold.co/48x64?text=?'"/>
+        </td>
+        <td class="p-3 font-medium">${p.name}</td>
+        <td class="p-3">PKR ${Number(p.price).toLocaleString()}</td>
+        <td class="p-3">
+          <button onclick="deleteProduct('${p.id}','${p.storage_path}')"
+                  class="px-3 py-1 bg-red-500 text-white text-sm rounded hover:bg-red-600">
+            Delete
+          </button>
+        </td>
+      </tr>`;
+    });
+  }
+
+  // ── ADD PRODUCT ──────────────────────────────────────────────
+  async function addProduct(e) {
+    e.preventDefault();
+    const name = document.getElementById("prod-name").value.trim();
+    const price = document.getElementById("prod-price").value.trim();
+    const desc = document.getElementById("prod-desc").value.trim();
+    const file = document.getElementById("prod-image").files[0];
+    const btn = document.getElementById("upload-btn");
+
+    if (!name || !price || !file) {
+      alert("Please fill all required fields");
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = "Uploading...";
+
+    try {
+      // Upload image
+      const ext = file.name.split(".").pop();
+      const filePath = `${Date.now()}.${ext}`;
+      const { error: upErr } = await sb.storage
+        .from(STORAGE_BUCKET)
+        .upload(filePath, file);
+      
+      if (upErr) throw upErr;
+
+      // Get public URL
+      const { data: urlData } = sb.storage
+        .from(STORAGE_BUCKET)
+        .getPublicUrl(filePath);
+
+      // Insert product
+      const { error: dbErr } = await sb
+        .from("products")
+        .insert([{
+          name: name,
+          price: parseFloat(price),
+          description: desc,
+          image_url: urlData.publicUrl,
+          storage_path: filePath
+        }]);
+      
+      if (dbErr) throw dbErr;
+
+      alert("Product added successfully!");
+      document.getElementById("add-form").reset();
+      await loadProducts();
+      showSection("list");
+    } catch(err) {
+      alert("Error: " + err.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Add Product";
+    }
+  }
+
+  // ── DELETE PRODUCT ───────────────────────────────────────────
+  window.deleteProduct = async function(id, storagePath) {
+    if (!confirm("Delete this product?")) return;
+    
+    try {
+      const { error: dbErr } = await sb.from("products").delete().eq("id", id);
+      if (dbErr) throw dbErr;
+
+      if (storagePath) {
+        await sb.storage.from(STORAGE_BUCKET).remove([storagePath]);
+      }
+
+      alert("Product deleted");
+      await loadProducts();
+    } catch(err) {
+      alert("Error: " + err.message);
+    }
+  };
+</script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+
+<!-- AUTH SCREEN -->
+<div id="auth-screen" class="min-h-screen flex items-center justify-center p-4">
+  <div class="bg-white rounded-lg shadow-lg p-8 max-w-sm w-full">
+    <h1 class="text-2xl font-bold text-center mb-6">Qazi Clothing Store Admin</h1>
+    <div class="space-y-4">
+      <input id="pw-input" type="password" placeholder="Password"
+             class="w-full px-4 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-black"/>
+      <button id="login-btn"
+              class="w-full py-2 bg-black text-white rounded hover:bg-gray-800">
+        Login
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- DASHBOARD -->
+<div id="dashboard" class="hidden">
+  <!-- Header -->
+  <div class="bg-white border-b">
+    <div class="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
+      <h1 class="text-xl font-bold">Qazi Clothing Store Admin</h1>
+      <button id="logout-btn" class="px-4 py-2 text-sm border rounded hover:bg-gray-100">
+        Logout
+      </button>
+    </div>
+  </div>
+
+  <!-- Nav -->
+  <div class="bg-white border-b">
+    <div class="max-w-6xl mx-auto px-4">
+      <div class="flex gap-6">
+        <button onclick="showSection('list')" 
+                class="py-3 px-2 border-b-2 border-black font-medium">
+          Products
+        </button>
+        <button onclick="showSection('add')"
+                class="py-3 px-2 border-b-2 border-transparent hover:border-gray-300">
+          Add New
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="max-w-6xl mx-auto p-4">
+    <!-- PRODUCTS LIST -->
+    <section id="sec-list" class="section">
+      <div class="bg-white rounded-lg shadow overflow-hidden">
+        <table class="w-full">
+          <thead class="bg-gray-50 border-b">
+            <tr>
+              <th class="p-3 text-left text-sm font-medium">Image</th>
+              <th class="p-3 text-left text-sm font-medium">Name</th>
+              <th class="p-3 text-left text-sm font-medium">Price</th>
+              <th class="p-3 text-left text-sm font-medium">Action</th>
+            </tr>
+          </thead>
+          <tbody id="products-tbody">
+            <tr><td colspan="4" class="text-center py-8">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ADD PRODUCT -->
+    <section id="sec-add" class="section hidden">
+      <div class="bg-white rounded-lg shadow p-6 max-w-lg">
+        <h2 class="text-xl font-bold mb-6">Add New Product</h2>
+        <form id="add-form" class="space-y-4">
+          <div>
+            <label class="block text-sm font-medium mb-1">Product Name *</label>
+            <input id="prod-name" type="text" required
+                   class="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-black"/>
+          </div>
+          
+          <div>
+            <label class="block text-sm font-medium mb-1">Price (PKR) *</label>
+            <input id="prod-price" type="number" min="1" required
+                   class="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-black"/>
+          </div>
+          
+          <div>
+            <label class="block text-sm font-medium mb-1">Description</label>
+            <textarea id="prod-desc" rows="3"
+                      class="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-black"></textarea>
+          </div>
+          
+          <div>
+            <label class="block text-sm font-medium mb-1">Product Image *</label>
+            <input id="prod-image" type="file" accept="image/*" required
+                   class="w-full text-sm"/>
+          </div>
+          
+          <button id="upload-btn" type="submit"
+                  class="w-full py-2 bg-black text-white rounded hover:bg-gray-800 disabled:opacity-50">
+            Add Product
+          </button>
+        </form>
+      </div>
+    </section>
+  </div>
+</div>
+
+</body>
+</html>
