@@ -1,0 +1,21 @@
+{
+  "name": "Qazistore ",
+  "short_name": "Qazistore",
+  "icons": [
+    {
+      "src": "/https://qaziclothingstore.com/favicon.ico /web-app-manifest-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/https://qaziclothingstore.com/favicon.ico /web-app-manifest-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "theme_color": "#c18f8f",
+  "background_color": "#ff9b9b",
+  "display": "standalone"
+}
