@@ -98,31 +98,28 @@
 
 </head>
 <body class="bg-gray-50">
-  <div id="browser-bypass" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background: linear-gradient(rgba(245, 230, 211, 0.8), rgba(245, 230, 211, 0.9)), url('https://images.unsplash.com/photo-1490481651871-ab68de25d43d?q=80&w=2070&auto=format&fit=crop'); background-size: cover; background-position: center; z-index: 9999999; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; font-family: 'Playfair Display', serif; overflow:hidden; touch-action:none;">
-    
-    <div style="padding:30px; background: rgba(255, 255, 255, 0.6); backdrop-blur: 10px; border-radius: 20px; margin: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1);">
-        <h2 style="color:#2d2d2d; font-size: 30px; margin-bottom:15px; font-weight:bold; letter-spacing: 1px;">Qazi Clothing Store</h2>
-        <p style="color:#4a4a4a; font-size: 18px; line-height:1.4; margin-bottom:35px; font-family: sans-serif;">Behtar experience aur designs dekhne ke liye website ko browser mein open karein.</p>
+  <script>
+    (function() {
+        var ua = navigator.userAgent || navigator.vendor || window.opera;
         
-        <a href="intent://qaziclothingstore.com/#Intent;scheme=https;action=android.intent.action.VIEW;package=com.android.chrome;end" 
-           style="display:inline-block; padding:18px 45px; background:#1a1a1a; color:#fff; text-decoration:none; border-radius:50px; font-weight:bold; font-size:18px; font-family: sans-serif; box-shadow: 0 10px 20px rgba(0,0,0,0.2);">
-           OPEN IN BROWSER
-        </a>
+        // Asli Detection: Check if it's Instagram or Facebook App
+        var isInstagram = (ua.indexOf("Instagram") > -1) || (ua.indexOf("FBAN") > -1) || (ua.indexOf("FBAV") > -1);
         
-        <p style="margin-top:35px; font-size:13px; color:#666; font-style:italic; font-family: sans-serif;">Tap the button to start shopping</p>
-    </div>
-</div>
+        // Strict Check: Agar Chrome ya Safari asli wala hai toh false kar do
+        var isRealBrowser = (ua.indexOf("Chrome") > -1 && ua.indexOf("Safari") > -1 && ua.indexOf("Edge") == -1 && !isInstagram);
 
-<script>
-    var ua = navigator.userAgent || navigator.vendor || window.opera;
-    var isInstagram = (ua.indexOf("Instagram") > -1) || (ua.indexOf("FBAN") > -1) || (ua.indexOf("FBAV") > -1);
-    
-    if (isInstagram) {
         var overlay = document.getElementById('browser-bypass');
-        overlay.style.display = 'flex';
-        document.body.style.overflow = 'hidden';
-        document.body.style.height = '100vh';
-    }
+
+        if (isInstagram && !isRealBrowser) {
+            overlay.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+            document.body.style.height = '100vh';
+        } else {
+            // Agar galti se show ho raha ho toh foran hide kar do
+            overlay.style.display = 'none';
+            document.body.style.overflow = 'auto';
+        }
+    })();
 </script>
 <!-- NAVIGATION -->
 <nav class="fixed top-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-sm shadow-sm">
