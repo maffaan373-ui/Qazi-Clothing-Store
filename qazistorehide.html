@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Admin Dashboard | Qazi Clothing Store</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+
+<style>
+  body{ font-family:'Inter',sans-serif; }
+  :root{ --gold:#b8912f; }
+  .text-gold{ color:var(--gold); }
+  .bg-gold{ background:var(--gold); }
+  .border-gold{ border-color:var(--gold); }
+
+  .tab-btn{ color:#6b7280; border-bottom:2px solid transparent; }
+  .tab-btn.active{ color:#111827; border-color:var(--gold); }
+
+  .page{ display:none; }
+  .page.active{ display:block; animation:fadeIn .25s ease both; }
+  @keyframes fadeIn{ from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:translateY(0);} }
+
+  .spinner{ border:3px solid #e5e7eb; border-top-color:var(--gold); border-radius:9999px; animation:spin .7s linear infinite; }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+
+  #modal-backdrop{ opacity:0; pointer-events:none; transition:opacity .2s ease; }
+  #modal-backdrop.open{ opacity:1; pointer-events:auto; }
+  #edit-modal{ transform:scale(.96); opacity:0; transition:all .2s ease; }
+  #modal-backdrop.open #edit-modal{ transform:scale(1); opacity:1; }
+
+  a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visible{
+    outline:2px solid var(--gold); outline-offset:2px;
+  }
+</style>
+</head>
+<body class="bg-gray-50 min-h-screen text-gray-900">
+
+<!-- ══════════════════════════ AUTH SCREEN ══════════════════════════ -->
+<div id="auth-screen" class="min-h-screen flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-xl p-8 max-w-sm w-full border border-gray-100">
+    <div class="text-center mb-6">
+      <h1 class="text-xl font-bold">Qazi Clothing Store</h1>
+      <p class="text-sm text-gray-500">Admin Dashboard</p>
+    </div>
+    <div class="space-y-4">
+      <div>
+        <label class="block text-sm font-medium mb-1 text-gray-700">Password</label>
+        <input id="pw-input" type="password" placeholder="Enter admin password"
+               class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold focus:border-transparent"/>
+      </div>
+      <p id="login-error" class="text-sm text-red-500 hidden">Incorrect password. Please try again.</p>
+      <button id="login-btn" class="w-full py-2.5 bg-black text-white font-medium rounded-lg hover:bg-gray-800 transition">
+        Log In
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════ DASHBOARD ══════════════════════════ -->
+<div id="dashboard" class="hidden">
+
+  <!-- Header -->
+  <header class="bg-white border-b border-gray-100 sticky top-0 z-20">
+    <div class="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
+      <div>
+        <h1 class="text-lg font-bold leading-tight">Qazi Clothing Store</h1>
+        <p class="text-xs text-gray-500">Admin Dashboard</p>
+      </div>
+      <button id="logout-btn" class="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition">
+        Log Out
+      </button>
+    </div>
+
+    <!-- Tabs -->
+    <nav class="max-w-6xl mx-auto px-4">
+      <div class="flex gap-6 overflow-x-auto">
+        <button data-page="overview" onclick="showPage('overview')" class="tab-btn active whitespace-nowrap py-3 px-1 text-sm font-medium">Overview</button>
+        <button data-page="analytics" onclick="showPage('analytics')" class="tab-btn whitespace-nowrap py-3 px-1 text-sm font-medium">Analytics</button>
+        <button data-page="products" onclick="showPage('products')" class="tab-btn whitespace-nowrap py-3 px-1 text-sm font-medium">Products</button>
+        <button data-page="add" onclick="showPage('add')" class="tab-btn whitespace-nowrap py-3 px-1 text-sm font-medium">Add Product</button>
+      </div>
+    </nav>
+  </header>
+
+  <main class="max-w-6xl mx-auto px-4 py-8">
+
+    <!-- ═══════════ OVERVIEW PAGE ═══════════ -->
+    <section id="page-overview" class="page active">
+      <h2 class="text-xl font-bold mb-6">Overview</h2>
+
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+        <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+          <p class="text-xs uppercase tracking-wide text-gray-500 mb-1">Total Products</p>
+          <p id="stat-count" class="text-3xl font-bold">—</p>
+        </div>
+        <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+          <p class="text-xs uppercase tracking-wide text-gray-500 mb-1">Inventory Value</p>
+          <p id="stat-value" class="text-3xl font-bold">—</p>
+        </div>
+        <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+          <p class="text-xs uppercase tracking-wide text-gray-500 mb-1">Missing Descriptions</p>
+          <p id="stat-missing-desc" class="text-3xl font-bold">—</p>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="font-semibold">Recently Added</h3>
+          <button onclick="showPage('products')" class="text-xs text-gold font-medium hover:underline">View all</button>
+        </div>
+        <div id="recent-products" class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3"></div>
+      </div>
+    </section>
+
+    <!-- ═══════════ ANALYTICS PAGE ═══════════ -->
+    <section id="page-analytics" class="page">
+      <div class="flex items-center justify-between mb-6 gap-3 flex-wrap">
+        <div>
+          <h2 class="text-xl font-bold">Analytics</h2>
+          <p class="text-sm text-gray-500">Visitor traffic and shopper activity on the storefront</p>
+        </div>
+        <button onclick="loadAnalytics()" id="analytics-refresh-btn"
+                class="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition">
+          Refresh
+        </button>
+      </div>
+
+      <div id="analytics-setup-notice" class="hidden bg-amber-50 border border-amber-200 rounded-xl p-5 mb-6">
+        <h3 class="font-semibold text-amber-800 mb-2">Analytics table not found</h3>
+        <p class="text-sm text-amber-700 mb-3">
+          Run this once in your Supabase SQL editor to start collecting visitor data. The storefront is already
+          set up to send events once this table exists.
+        </p>
+        <pre id="analytics-sql" class="text-xs bg-white border border-amber-200 rounded-lg p-3 overflow-x-auto whitespace-pre">create table public.analytics_events (
+  id uuid primary key default gen_random_uuid(),
+  event_type text not null,
+  visitor_id text,
+  product_id uuid,
+  product_name text,
+  page text,
+  meta text,
+  created_at timestamptz not null default now()
+);
+
+alter table public.analytics_events enable row level security;
+
+create policy "Allow anon insert" on public.analytics_events
+  for insert to anon with check (true);
+
+create policy "Allow anon select" on public.analytics_events
+  for select to anon using (true);</pre>
+        <button onclick="copySql()" class="mt-3 px-4 py-2 text-xs bg-amber-800 text-white rounded-lg hover:bg-amber-900 transition">
+          Copy SQL
+        </button>
+      </div>
+
+      <div id="analytics-content" class="hidden">
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
+          <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+            <p class="text-xs uppercase tracking-wide text-gray-500 mb-1">Page Views</p>
+            <p id="an-pageviews" class="text-2xl font-bold">—</p>
+          </div>
+          <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+            <p class="text-xs uppercase tracking-wide text-gray-500 mb-1">Unique Visitors</p>
+            <p id="an-visitors" class="text-2xl font-bold">—</p>
+          </div>
+          <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+            <p class="text-xs uppercase tracking-wide text-gray-500 mb-1">Product Views</p>
+            <p id="an-productviews" class="text-2xl font-bold">—</p>
+          </div>
+          <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+            <p class="text-xs uppercase tracking-wide text-gray-500 mb-1">Added to Cart</p>
+            <p id="an-addtocart" class="text-2xl font-bold">—</p>
+          </div>
+          <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+            <p class="text-xs uppercase tracking-wide text-gray-500 mb-1">Wishlist Saves</p>
+            <p id="an-wishlist" class="text-2xl font-bold">—</p>
+          </div>
+          <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+            <p class="text-xs uppercase tracking-wide text-gray-500 mb-1">WhatsApp Orders</p>
+            <p id="an-orders" class="text-2xl font-bold">—</p>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+            <h3 class="font-semibold mb-4">Visits — Last 7 Days</h3>
+            <div id="an-trend" class="flex items-end gap-2 h-32"></div>
+          </div>
+
+          <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+            <h3 class="font-semibold mb-4">Most Viewed Products</h3>
+            <div id="an-top-products" class="space-y-3"></div>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+          <h3 class="font-semibold mb-4">Recent Activity</h3>
+          <div id="an-activity" class="divide-y divide-gray-100"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════ PRODUCTS PAGE ═══════════ -->
+    <section id="page-products" class="page">
+      <div class="flex items-center justify-between mb-6 gap-3 flex-wrap">
+        <h2 class="text-xl font-bold">Products</h2>
+        <input id="product-search" type="text" placeholder="Search products..."
+               oninput="renderProducts()"
+               class="px-3 py-2 border border-gray-300 rounded-lg text-sm w-56 focus:outline-none focus:ring-2 focus:ring-gold focus:border-transparent"/>
+      </div>
+
+      <div class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead class="bg-gray-50 border-b border-gray-100">
+              <tr>
+                <th class="p-3 text-left font-medium text-gray-600">Image</th>
+                <th class="p-3 text-left font-medium text-gray-600">Name</th>
+                <th class="p-3 text-left font-medium text-gray-600">Price</th>
+                <th class="p-3 text-left font-medium text-gray-600">Description</th>
+                <th class="p-3 text-left font-medium text-gray-600">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="products-tbody">
+              <tr><td colspan="5" class="text-center py-10 text-gray-400">Loading...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════ ADD PRODUCT PAGE ═══════════ -->
+    <section id="page-add" class="page">
+      <h2 class="text-xl font-bold mb-6">Add New Product</h2>
+
+      <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-6 max-w-lg">
+        <form id="add-form" class="space-y-4">
+          <div>
+            <label class="block text-sm font-medium mb-1 text-gray-700">Product Name *</label>
+            <input id="prod-name" type="text" required
+                   class="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold focus:border-transparent"/>
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium mb-1 text-gray-700">Price (PKR) *</label>
+            <input id="prod-price" type="number" min="1" required
+                   class="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold focus:border-transparent"/>
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium mb-1 text-gray-700">Description</label>
+            <textarea id="prod-desc" rows="3"
+                      class="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold focus:border-transparent"></textarea>
+            <p class="text-xs text-gray-400 mt-1">Optional, but recommended — it's included in the WhatsApp order message.</p>
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium mb-1 text-gray-700">Product Images * <span class="text-gray-400 font-normal">(minimum 3)</span></label>
+            <input id="prod-images" type="file" accept="image/*" multiple required
+                   class="w-full text-sm border border-gray-300 rounded-lg px-3 py-2"/>
+            <p id="prod-images-count" class="text-xs text-gray-400 mt-1">No images selected yet</p>
+            <div id="prod-images-preview" class="hidden grid grid-cols-4 gap-2 mt-3"></div>
+          </div>
+
+          <button id="upload-btn" type="submit"
+                  class="w-full py-2.5 bg-black text-white font-medium rounded-lg hover:bg-gray-800 transition disabled:opacity-50">
+            Add Product
+          </button>
+        </form>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- ══════════════════════════ EDIT MODAL ══════════════════════════ -->
+<div id="modal-backdrop" class="fixed inset-0 bg-black/50 z-40 flex items-center justify-center p-4">
+  <div id="edit-modal" class="bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
+    <div class="flex items-center justify-between mb-5">
+      <h3 class="text-lg font-bold">Edit Product</h3>
+      <button onclick="closeEditModal()" aria-label="Close" class="p-1 text-gray-400 hover:text-black">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <form id="edit-form" class="space-y-4">
+      <input type="hidden" id="edit-id"/>
+      <div>
+        <label class="block text-sm font-medium mb-1 text-gray-700">Product Name *</label>
+        <input id="edit-name" type="text" required
+               class="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold focus:border-transparent"/>
+      </div>
+      <div>
+        <label class="block text-sm font-medium mb-1 text-gray-700">Price (PKR) *</label>
+        <input id="edit-price" type="number" min="1" required
+               class="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold focus:border-transparent"/>
+      </div>
+      <div>
+        <label class="block text-sm font-medium mb-1 text-gray-700">Description</label>
+        <textarea id="edit-desc" rows="3"
+                  class="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold focus:border-transparent"></textarea>
+      </div>
+      <div>
+        <label class="block text-sm font-medium mb-1 text-gray-700">Replace Image</label>
+        <input id="edit-image" type="file" accept="image/*"
+               class="w-full text-sm border border-gray-300 rounded-lg px-3 py-2"/>
+        <p class="text-xs text-gray-400 mt-1">Leave empty to keep the current image.</p>
+      </div>
+      <button id="edit-save-btn" type="submit"
+              class="w-full py-2.5 bg-black text-white font-medium rounded-lg hover:bg-gray-800 transition disabled:opacity-50">
+        Save Changes
+      </button>
+    </form>
+  </div>
+</div>
+
+<!-- ══════════════════════════ TOAST ══════════════════════════ -->
+<div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-black text-white text-sm px-5 py-3 rounded-lg shadow-xl opacity-0 pointer-events-none transition-opacity z-50"></div>
+
+<script>
+/* ══════════════════════════ CONFIG ══════════════════════════ */
+const SUPABASE_URL   = "https://qrflkkjrsepwqxfgztct.supabase.co";
+const SUPABASE_ANON  = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFyZmxra2pyc2Vwd3F4Zmd6dGN0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIwMjY2NjIsImV4cCI6MjA4NzYwMjY2Mn0.KXJrHf5enS-fuuXjEdbr-bQ7pU9R5lJF8QPsqz71UeE";
+const STORAGE_BUCKET  = "product-images";
+const ADMIN_PASSWORD  = "G4eJ8dL2aR";
+const AUTH_KEY        = "qazi_admin_auth";
+
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+let products = [];
+
+/* ══════════════════════════ INIT ══════════════════════════ */
+document.addEventListener("DOMContentLoaded", () => {
+  if (localStorage.getItem(AUTH_KEY) === "true") showDashboard();
+
+  document.getElementById("login-btn").addEventListener("click", login);
+  document.getElementById("pw-input").addEventListener("keydown", e => { if (e.key === "Enter") login(); });
+  document.getElementById("logout-btn").addEventListener("click", logout);
+  document.getElementById("add-form").addEventListener("submit", addProduct);
+  document.getElementById("edit-form").addEventListener("submit", saveEdit);
+  document.getElementById("modal-backdrop").addEventListener("click", e => {
+    if (e.target.id === "modal-backdrop") closeEditModal();
+  });
+  document.getElementById("prod-images").addEventListener("change", previewImages);
+});
+
+/* ══════════════════════════ AUTH ══════════════════════════ */
+function login() {
+  const pw = document.getElementById("pw-input").value.trim();
+  const errorEl = document.getElementById("login-error");
+  if (pw === ADMIN_PASSWORD) {
+    localStorage.setItem(AUTH_KEY, "true");
+    errorEl.classList.add("hidden");
+    showDashboard();
+  } else {
+    errorEl.classList.remove("hidden");
+  }
+}
+
+function logout() {
+  localStorage.removeItem(AUTH_KEY);
+  location.reload();
+}
+
+function showDashboard() {
+  document.getElementById("auth-screen").classList.add("hidden");
+  document.getElementById("dashboard").classList.remove("hidden");
+  loadProducts();
+}
+
+/* ══════════════════════════ TABS / PAGES ══════════════════════════ */
+let analyticsLoaded = false;
+function showPage(name) {
+  document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
+  document.getElementById("page-" + name).classList.add("active");
+  document.querySelectorAll(".tab-btn").forEach(b => b.classList.toggle("active", b.dataset.page === name));
+  window.scrollTo({ top: 0 });
+  if (name === "analytics" && !analyticsLoaded) {
+    analyticsLoaded = true;
+    loadAnalytics();
+  }
+}
+
+/* ══════════════════════════ TOAST ══════════════════════════ */
+let toastTimer;
+function showToast(msg) {
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.classList.remove("opacity-0");
+  el.classList.add("opacity-100");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    el.classList.remove("opacity-100");
+    el.classList.add("opacity-0");
+  }, 2500);
+}
+
+/* ══════════════════════════ LOAD PRODUCTS ══════════════════════════ */
+async function loadProducts() {
+  const { data, error } = await sb.from("products").select("*").order("created_at", { ascending: false });
+  if (error) {
+    showToast("Error loading products: " + error.message);
+    return;
+  }
+  products = data || [];
+  renderProducts();
+  renderOverview();
+}
+
+/* ══════════════════════════ OVERVIEW PAGE ══════════════════════════ */
+function renderOverview() {
+  document.getElementById("stat-count").textContent = products.length;
+  const totalValue = products.reduce((sum, p) => sum + Number(p.price || 0), 0);
+  document.getElementById("stat-value").textContent = "PKR " + totalValue.toLocaleString();
+  const missing = products.filter(p => !p.description || !p.description.trim()).length;
+  document.getElementById("stat-missing-desc").textContent = missing;
+
+  const recent = document.getElementById("recent-products");
+  const items = products.slice(0, 6);
+  recent.innerHTML = items.length
+    ? items.map(p => `
+        <div class="rounded-lg overflow-hidden border border-gray-100">
+          <img src="${p.image_url}" alt="${p.name}" class="w-full h-24 object-cover"
+               onerror="this.src='https://placehold.co/120x96/f5f5f5/999?text=No+Image'"/>
+          <p class="text-[11px] p-1.5 truncate">${p.name}</p>
+        </div>`).join("")
+    : '<p class="col-span-full text-sm text-gray-400 py-4 text-center">No products yet</p>';
+}
+
+/* ══════════════════════════ PRODUCTS PAGE ══════════════════════════ */
+function renderProducts() {
+  const tbody = document.getElementById("products-tbody");
+  const query = (document.getElementById("product-search").value || "").trim().toLowerCase();
+  const list = query ? products.filter(p => p.name.toLowerCase().includes(query)) : products;
+
+  if (list.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="5" class="text-center py-10 text-gray-400">No products found</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = list.map(p => `
+    <tr class="border-b border-gray-50 hover:bg-gray-50">
+      <td class="p-3">
+        <img src="${p.image_url}" alt="${p.name}" class="w-12 h-16 object-cover rounded-lg"
+             onerror="this.src='https://placehold.co/48x64/f5f5f5/999?text=No+Image'"/>
+      </td>
+      <td class="p-3 font-medium">${p.name}</td>
+      <td class="p-3">PKR ${Number(p.price).toLocaleString()}</td>
+      <td class="p-3 max-w-xs">
+        ${p.description
+          ? `<span class="text-gray-600 line-clamp-1">${p.description}</span>`
+          : `<span class="text-amber-600 text-xs bg-amber-50 px-2 py-0.5 rounded-full">Missing</span>`}
+      </td>
+      <td class="p-3 whitespace-nowrap">
+        <button onclick="openEditModal('${p.id}')"
+                class="px-3 py-1.5 text-xs border border-gray-300 rounded-lg hover:bg-gray-100 transition mr-2">
+          Edit
+        </button>
+        <button onclick="deleteProduct('${p.id}','${p.storage_path || ""}')"
+                class="px-3 py-1.5 text-xs bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition">
+          Delete
+        </button>
+      </td>
+    </tr>`).join("");
+}
+
+/* ══════════════════════════ ADD PRODUCT ══════════════════════════ */
+function previewImages() {
+  const files = Array.from(document.getElementById("prod-images").files || []);
+  const preview = document.getElementById("prod-images-preview");
+  const countLabel = document.getElementById("prod-images-count");
+
+  if (files.length === 0) {
+    preview.classList.add("hidden");
+    preview.innerHTML = "";
+    countLabel.textContent = "No images selected yet";
+    countLabel.classList.remove("text-red-500");
+    return;
+  }
+
+  countLabel.textContent = files.length < 3
+    ? `${files.length} selected — at least 3 required`
+    : `${files.length} images selected`;
+  countLabel.classList.toggle("text-red-500", files.length < 3);
+
+  preview.classList.remove("hidden");
+  preview.innerHTML = files.map(f => `<img src="${URL.createObjectURL(f)}" class="w-full aspect-square object-cover rounded-lg border border-gray-200"/>`).join("");
+}
+
+async function addProduct(e) {
+  e.preventDefault();
+  const name = document.getElementById("prod-name").value.trim();
+  const price = document.getElementById("prod-price").value.trim();
+  const desc = document.getElementById("prod-desc").value.trim();
+  const files = Array.from(document.getElementById("prod-images").files || []);
+  const btn = document.getElementById("upload-btn");
+
+  if (!name || !price || files.length === 0) {
+    showToast("Please fill all required fields");
+    return;
+  }
+  if (files.length < 3) {
+    showToast("Please select at least 3 images");
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = "Uploading...";
+
+  try {
+    const uploaded = [];
+    for (const file of files) {
+      const ext = file.name.split(".").pop();
+      const filePath = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      const { error: upErr } = await sb.storage.from(STORAGE_BUCKET).upload(filePath, file);
+      if (upErr) throw upErr;
+      const { data: urlData } = sb.storage.from(STORAGE_BUCKET).getPublicUrl(filePath);
+      uploaded.push({ url: urlData.publicUrl, path: filePath });
+    }
+
+    const insertRow = {
+      name: name,
+      price: parseFloat(price),
+      description: desc,
+      image_url: uploaded[0].url,
+      storage_path: uploaded[0].path
+    };
+
+    try {
+      const { error: dbErr } = await sb.from("products").insert([{
+        ...insertRow,
+        image_urls: uploaded.map(u => u.url)
+      }]);
+      if (dbErr) throw dbErr;
+    } catch (innerErr) {
+      if (/image_urls/i.test(innerErr.message)) {
+        const { error: fallbackErr } = await sb.from("products").insert([insertRow]);
+        if (fallbackErr) throw fallbackErr;
+        showToast("Product added, but only the first image was saved — run the SQL above to store all images");
+      } else {
+        throw innerErr;
+      }
+    }
+
+    showToast("Product added successfully");
+    document.getElementById("add-form").reset();
+    document.getElementById("prod-images-preview").classList.add("hidden");
+    document.getElementById("prod-images-count").textContent = "No images selected yet";
+    await loadProducts();
+    showPage("products");
+  } catch (err) {
+    showToast("Error: " + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Add Product";
+  }
+}
+
+/* ══════════════════════════ EDIT PRODUCT ══════════════════════════ */
+function openEditModal(id) {
+  const p = products.find(x => x.id === id);
+  if (!p) return;
+  document.getElementById("edit-id").value = p.id;
+  document.getElementById("edit-name").value = p.name;
+  document.getElementById("edit-price").value = p.price;
+  document.getElementById("edit-desc").value = p.description || "";
+  document.getElementById("edit-image").value = "";
+  document.getElementById("modal-backdrop").classList.add("open");
+}
+
+function closeEditModal() {
+  document.getElementById("modal-backdrop").classList.remove("open");
+}
+
+async function saveEdit(e) {
+  e.preventDefault();
+  const id = document.getElementById("edit-id").value;
+  const p = products.find(x => x.id === id);
+  if (!p) return;
+
+  const name = document.getElementById("edit-name").value.trim();
+  const price = document.getElementById("edit-price").value.trim();
+  const desc = document.getElementById("edit-desc").value.trim();
+  const file = document.getElementById("edit-image").files[0];
+  const btn = document.getElementById("edit-save-btn");
+
+  if (!name || !price) {
+    showToast("Please fill all required fields");
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = "Saving...";
+
+  try {
+    const updates = { name, price: parseFloat(price), description: desc };
+
+    if (file) {
+      const ext = file.name.split(".").pop();
+      const filePath = `${Date.now()}.${ext}`;
+      const { error: upErr } = await sb.storage.from(STORAGE_BUCKET).upload(filePath, file);
+      if (upErr) throw upErr;
+
+      const { data: urlData } = sb.storage.from(STORAGE_BUCKET).getPublicUrl(filePath);
+      updates.image_url = urlData.publicUrl;
+      updates.storage_path = filePath;
+
+      if (p.storage_path) {
+        await sb.storage.from(STORAGE_BUCKET).remove([p.storage_path]);
+      }
+    }
+
+    const { error: dbErr } = await sb.from("products").update(updates).eq("id", id);
+    if (dbErr) throw dbErr;
+
+    showToast("Product updated");
+    closeEditModal();
+    await loadProducts();
+  } catch (err) {
+    showToast("Error: " + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Save Changes";
+  }
+}
+
+/* ══════════════════════════ DELETE PRODUCT ══════════════════════════ */
+window.deleteProduct = async function (id, storagePath) {
+  if (!confirm("Delete this product? This cannot be undone.")) return;
+  try {
+    const { error: dbErr } = await sb.from("products").delete().eq("id", id);
+    if (dbErr) throw dbErr;
+    if (storagePath) await sb.storage.from(STORAGE_BUCKET).remove([storagePath]);
+    showToast("Product deleted");
+    await loadProducts();
+  } catch (err) {
+    showToast("Error: " + err.message);
+  }
+};
+
+/* ══════════════════════════ ANALYTICS PAGE ══════════════════════════ */
+function copySql() {
+  const text = document.getElementById("analytics-sql").textContent;
+  navigator.clipboard.writeText(text).then(() => showToast("SQL copied to clipboard"));
+}
+
+function eventIcon(type) {
+  const icons = {
+    page_view: "&#128065;",
+    product_view: "&#128247;",
+    add_to_cart: "&#128722;",
+    wishlist_add: "&#9825;",
+    whatsapp_order: "&#128172;"
+  };
+  return icons[type] || "&#8226;";
+}
+
+function eventLabel(e) {
+  switch (e.event_type) {
+    case "page_view": return `Viewed page "${e.page || "shop"}"`;
+    case "product_view": return `Viewed product "${e.product_name || e.product_id || "unknown"}"`;
+    case "add_to_cart": return `Added "${e.product_name || e.product_id || "unknown"}" to cart`;
+    case "wishlist_add": return `Saved "${e.product_name || e.product_id || "unknown"}" to wishlist`;
+    case "whatsapp_order": return `Sent a WhatsApp order${e.meta ? " — " + e.meta : ""}`;
+    default: return e.event_type;
+  }
+}
+
+async function loadAnalytics() {
+  const btn = document.getElementById("analytics-refresh-btn");
+  const setupNotice = document.getElementById("analytics-setup-notice");
+  const content = document.getElementById("analytics-content");
+
+  btn.disabled = true;
+  btn.textContent = "Loading...";
+
+  try {
+    const { data, error } = await sb
+      .from("analytics_events")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(2000);
+
+    if (error) {
+      if (error.code === "42P01" || /does not exist/i.test(error.message)) {
+        setupNotice.classList.remove("hidden");
+        content.classList.add("hidden");
+        return;
+      }
+      throw error;
+    }
+
+    setupNotice.classList.add("hidden");
+    content.classList.remove("hidden");
+
+    const events = data || [];
+    const countType = t => events.filter(e => e.event_type === t).length;
+    const uniqueVisitors = new Set(events.map(e => e.visitor_id).filter(Boolean)).size;
+
+    document.getElementById("an-pageviews").textContent = countType("page_view");
+    document.getElementById("an-visitors").textContent = uniqueVisitors;
+    document.getElementById("an-productviews").textContent = countType("product_view");
+    document.getElementById("an-addtocart").textContent = countType("add_to_cart");
+    document.getElementById("an-wishlist").textContent = countType("wishlist_add");
+    document.getElementById("an-orders").textContent = countType("whatsapp_order");
+
+    /* 7-day trend (page views) */
+    const trendWrap = document.getElementById("an-trend");
+    const days = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      days.push(d);
+    }
+    const dayCounts = days.map(d => {
+      const key = d.toDateString();
+      return events.filter(e => e.event_type === "page_view" && e.created_at && new Date(e.created_at).toDateString() === key).length;
+    });
+    const maxCount = Math.max(1, ...dayCounts);
+    trendWrap.innerHTML = days.map((d, i) => `
+      <div class="flex-1 flex flex-col items-center justify-end h-full gap-1">
+        <div class="w-full bg-gold rounded-t" style="height:${Math.max(4, (dayCounts[i] / maxCount) * 100)}%"></div>
+        <span class="text-[10px] text-gray-400">${d.toLocaleDateString(undefined, { weekday: "short" })}</span>
+      </div>`).join("");
+
+    /* Top viewed products */
+    const viewsByProduct = {};
+    events.filter(e => e.event_type === "product_view").forEach(e => {
+      const key = e.product_id || e.product_name || "unknown";
+      if (!viewsByProduct[key]) viewsByProduct[key] = { name: e.product_name || "Unknown product", count: 0 };
+      viewsByProduct[key].count += 1;
+    });
+    const topProducts = Object.values(viewsByProduct).sort((a, b) => b.count - a.count).slice(0, 5);
+    const topWrap = document.getElementById("an-top-products");
+    topWrap.innerHTML = topProducts.length
+      ? topProducts.map(p => `
+          <div class="flex items-center justify-between text-sm">
+            <span class="truncate pr-2">${p.name}</span>
+            <span class="text-gray-500 font-medium shrink-0">${p.count} view${p.count === 1 ? "" : "s"}</span>
+          </div>`).join("")
+      : '<p class="text-sm text-gray-400">No product views yet</p>';
+
+    /* Recent activity */
+    const activityWrap = document.getElementById("an-activity");
+    const recent = events.slice(0, 15);
+    activityWrap.innerHTML = recent.length
+      ? recent.map(e => `
+          <div class="py-2.5 flex items-center justify-between gap-3 text-sm">
+            <span class="flex items-center gap-2 min-w-0">
+              <span>${eventIcon(e.event_type)}</span>
+              <span class="truncate">${eventLabel(e)}</span>
+            </span>
+            <span class="text-xs text-gray-400 shrink-0">${e.created_at ? new Date(e.created_at).toLocaleString() : ""}</span>
+          </div>`).join("")
+      : '<p class="text-sm text-gray-400 py-4">No activity recorded yet</p>';
+
+  } catch (err) {
+    showToast("Error loading analytics: " + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Refresh";
+  }
+}
+
+</script>
+</body>
+</html>
